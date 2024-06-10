@@ -16,11 +16,12 @@ from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms.v2 as transforms
 
 # TODO : Convert All dataset into image data and masks using simply ITK
-def convert_data_to_image_mask_list(dataset_loc, candidates_loc, save_loc):
+def convert_data_to_image_mask_list(dataset_loc, candidates_loc, annotations_loc, save_loc):
     """
     @brief Converts the dataset and annotations into images and masks
     @param dataset_loc global location of dataset
     @param candidates_loc global location of candidates
+    @param annotations_loc global location of annotations
     @param save_loc save location of candidates, relative path
 
     return (list image_data, list image_mask) Image Data (512x512 images) and corresponding Mask
@@ -30,6 +31,7 @@ def convert_data_to_image_mask_list(dataset_loc, candidates_loc, save_loc):
     # Dateset is made up of subset of datasets
     dataset_files = os.listdir(dataset_loc)
     candidates_data = pd.read_csv(candidates_loc)
+    annotations_data = pd.read_csv(annotations_loc)
     save_location = os.path.join(os.getcwd(), save_loc)
 
     if os.path.exists(save_location):
@@ -46,8 +48,20 @@ def convert_data_to_image_mask_list(dataset_loc, candidates_loc, save_loc):
                 mhd_file = SimpleITK.ReadImage(data_file)
                 ct_scan = np.array(SimpleITK.GetArrayFromImage(mhd_file), dtype=np.float32)
                 ct_scan.clip(-1000, 1000, ct_scan)
-                origin_xyz = mhd_file.GetOrigin()
 
+                # Normalize the CT Scan from 0 to 1, float to display as a map
+                ct_scan = (ct_scan - (-1000)) / 2000.0
+
+                # Get the annotation and candidate data from the image
+                annotation_rows = annotations_data[annotations_data["seriesuid"] == data_file.rstrip(".mhd")]
+                candidates_rows = candidates_data[candidates_data["seriesuid"] == data_file.rstrip(".mhd")]
+
+                # Mask array
+                ct_scan_mask = np.zeros(ct_scan.shape)
+
+                # Find and choose the candidates that are malign as detections, all other nodules are not considered
+                # Choose from annotations
+                # ? Annotations contain all the annotations
 
 
 class CustomLungDataset(Dataset):
@@ -63,8 +77,8 @@ class CustomLungDataset(Dataset):
         # TODO : Transforms are the image augmentation
         self.transforms     = transforms.Compose([
             transforms.ToTensor(), # Convert to Tensor and Normalize [0, 1] (/255)
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomVerticalFlip(),
+            transforms.RandomHorizontalFlip(0.25),
+            transforms.RandomVerticalFlip(0.25),
             transforms.RandomRotation(20)
         ])
 
