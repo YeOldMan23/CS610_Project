@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+from tqdm import tqdm
 import segmentation_models_pytorch as smp
 
 # Hyperparams
@@ -8,16 +9,22 @@ NUM_EPOCHS = 50
 LEARNING_RATE = 0.001
 LOSS_WEIGHTS = [0.7, 0.3]
 
+from .dataset_prep import CustomLungDataset
+
 # Model
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model_params = dict(
             pooling='avg',             
             dropout=0.2,               
             activation="sigmoid",      
-            classes=2, # 2 types of lumps malign or benign                 
+            classes=2, # 2 types of lumps malign (1) or benign(0)            
         )
 model_backbone = "resnet34"
-model = smp.UnetPlusPlus(model_backbone=model_backbone, encoder_weights="imagenet", decoder_attention_type=None, aux_params=model_params)
+model = smp.UnetPlusPlus(model_backbone=model_backbone, 
+                         encoder_weights="imagenet", 
+                         decoder_attention_type=None, 
+                         aux_params=model_params, 
+                         activation="softmax")
 model.to(device=device)
 optimizer = torch.optim.Adam(model.parameters(),LEARNING_RATE)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="max", factor=0.75, patience=0, threshold=0.01, verbose=True)
@@ -74,8 +81,14 @@ def apply_loss(predictions, target):
         final_loss += loss_func(predictions, target)
     return final_loss
 
-# Import Dataloader here
+# Import Dataset Here, make dataloader
 
 # Training Loop
 for epoch in NUM_EPOCHS:
-    pass
+    # Mode
+    model.train()
+    # for idx, (inputs, targets) in enumerate(tqdm()):
+    #     pass
+
+    model.eval()
+    # Put against the test set
