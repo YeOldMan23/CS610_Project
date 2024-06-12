@@ -9,7 +9,11 @@ NUM_EPOCHS = 50
 LEARNING_RATE = 0.001
 LOSS_WEIGHTS = [0.7, 0.3]
 
-from .dataset_prep import CustomLungDataset
+from .dataset_prep import prep_dataset
+
+base_location = "C:\Users\kiere\Desktop\SMU MITB\CS610\LUNA16" # ! Replace with your own location
+candidates_loc = "C:\Users\kiere\Desktop\SMU MITB\CS610\LUNA16\candidates.csv" # ! Replace with your own location
+save_loc = "dataset_save"
 
 # Model
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -82,13 +86,61 @@ def apply_loss(predictions, target):
     return final_loss
 
 # Import Dataset Here, make dataloader
+train_dataloader, test_dataloader = prep_dataset(save_loc=save_loc)
 
 # Training Loop
 for epoch in NUM_EPOCHS:
-    # Mode
+    print("Epoch : {}".format(epoch + 1))
+    # Model training and metrics
     model.train()
-    # for idx, (inputs, targets) in enumerate(tqdm()):
-    #     pass
+
+    # Metrics in terms of pixel
+    train_epoch_loss = 0
+    train_epoch_IoU = 0
+    train_epoch_precision = 0
+    train_epoch_recall = 0
+
+    for idx, (inputs, targets) in enumerate(tqdm(train_dataloader)):
+        optimizer.zero_grad()
+        outputs = model(inputs.to(device))
+        loss = apply_loss(outputs, targets)
+        loss.backward()
+        optimizer.step()
+        
+        train_epoch_loss += loss.item()
+
+        # Calculate other stuff
+        true_positive = outputs * targets
+        false_positive = (outputs) * (1 - targets)
+        false_negative = (1 - outputs) * targets
+        true_negative = (1 - outputs) * (1 - targets)
+
+        IoU = true_positive / (true_positive + false_positive + false_negative)
+        precision = true_positive / (true_positive + false_positive)
+        recall = true_positive / (true_positive + false_negative)
+
+        
+    test_epoch_loss = 0
+    test_epoch_IoU = 0
+    test_epoch_precision = 0
+    test_epoch_recall = 0
 
     model.eval()
     # Put against the test set
+    with torch.no_grad():
+        for idx, (inputs, targets) in enumerate(tqdm(test_dataloader)):
+            outputs = model(inputs.to(device))
+            loss = apply_loss(outputs, targets)
+            
+            test_epoch_loss += loss.item()
+
+            # Calculate other stuff
+            true_positive = outputs * targets
+            false_positive = (outputs) * (1 - targets)
+            false_negative = (1 - outputs) * targets
+            true_negative = (1 - outputs) * (1 - targets)
+
+            IoU = true_positive / (true_positive + false_positive + false_negative)
+            precision = true_positive / (true_positive + false_positive)
+            recall = true_positive / (true_positive + false_negative)
+

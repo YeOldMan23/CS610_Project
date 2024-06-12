@@ -62,6 +62,7 @@ def convert_data_to_image_mask_list(dataset_loc, candidates_loc, annotations_loc
                 # Find and choose the candidates that are malign as detections, all other nodules are not considered
                 # Choose from annotations
                 # ? Annotations contain all the annotations
+                # ? Candidates contain all the candidates that are chosen
 
 
 class CustomLungDataset(Dataset):
@@ -97,14 +98,14 @@ class CustomLungDataset(Dataset):
 
         return image, mask
 
-# Return the Dataset from here
-def prep_dataset(dataset_loc, is_test=False):
+# Return the Dataloader(s) from here
+def prep_dataset(save_loc) -> list:
     pass
 
 if __name__ == '__main__':
     base_location = "C:\Users\kiere\Desktop\SMU MITB\CS610\LUNA16" # ! Replace with your own location
     candidates_loc = "C:\Users\kiere\Desktop\SMU MITB\CS610\LUNA16\candidates.csv" # ! Replace with your own location
-    save_loc = ""
+    save_loc = "dataset_save"
     data_prepped = True # ! Make false if dataset is prepped
     if not data_prepped:
         convert_data_to_image_mask_list(base_location, candidates_loc, save_Loc)
