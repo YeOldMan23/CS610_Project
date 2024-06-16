@@ -125,7 +125,7 @@ if __name__ == "__main__":
                             activation="softmax")
     model.to(device=device)
     optimizer = torch.optim.Adam(model.parameters(),LEARNING_RATE)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="max", factor=0.75, patience=0, threshold=0.01, verbose=True)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.75, patience=0, threshold=0.01, verbose=True)
     
     # ! Metrics to consider before saving the model
     best_loss = -math.inf
@@ -174,7 +174,8 @@ if __name__ == "__main__":
         ave_train_recall = train_epoch_recall / len(train_dataloader)
 
         print(f"Loss : {ave_train_loss} IoU : {ave_train_IoU} Precision : {ave_train_precision} Recall : {ave_train_recall}")
- 
+        scheduler.step(ave_train_loss)
+
         test_epoch_loss = 0
         test_epoch_IoU = 0
         test_epoch_precision = 0

@@ -5,6 +5,8 @@ import SimpleITK
 import shutil
 import numpy as np
 
+import argparse
+
 # Annotations
 import pandas as pd
 from PIL import Image
@@ -41,6 +43,8 @@ def convert_data_to_image_mask_list(dataset_loc, candidates_loc, annotations_loc
     image_data = []
 
     for dataset in dataset_files: # Subset 1-10
+        if dataset.endswith(".csv"):
+            continue
         for data_file in os.listdir(os.path.join(dataset_loc, dataset)):
             # Get all the .mhd data
             if data_file.endswith(".mhd"):
@@ -66,7 +70,7 @@ def convert_data_to_image_mask_list(dataset_loc, candidates_loc, annotations_loc
 
 
 class CustomLungDataset(Dataset):
-    def __init__(self, mask_list, image_list):
+    def __init__(self, mask_list, image_list, dataset_stats : tuple, is_train=False):
         """
         @brief Custom Dataset for dataset
         @param mask_list list of mask information
@@ -74,13 +78,21 @@ class CustomLungDataset(Dataset):
         """
         self.mask_list      = mask_list
         self.raw_data_list  = image_list
+        self.is_train = is_train
+        self.dataset_mean, self.dataset_std = dataset_stats
 
         # TODO : Transforms are the image augmentation
-        self.transforms     = transforms.Compose([
+        self.train_transforms = transforms.Compose([
             transforms.ToTensor(), # Convert to Tensor and Normalize [0, 1] (/255)
+            transforms.Normalize([self.dataset_mean, ], [self.dataset_std, ]),
             transforms.RandomHorizontalFlip(0.25),
             transforms.RandomVerticalFlip(0.25),
             transforms.RandomRotation(20)
+
+        ])
+        self.test_transforms = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize([self.dataset_mean, ], [self.dataset_std, ])
         ])
 
     def __len__(self):
@@ -93,8 +105,10 @@ class CustomLungDataset(Dataset):
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         image = Image.fromarray(image)
 
-        if self.transforms is not None:
-            image, mask = self.transforms(image, mask)
+        if self.is_train:
+            image, mask = self.train_transforms(image, mask)
+        else:
+            image, mask = self.test_transforms(image, mask)
 
         return image, mask
 
@@ -103,10 +117,27 @@ def prep_dataset(save_loc) -> list:
     pass
 
 if __name__ == '__main__':
-    base_location = "C:\Users\kiere\Desktop\SMU MITB\CS610\LUNA16" # ! Replace with your own location
-    candidates_loc = "C:\Users\kiere\Desktop\SMU MITB\CS610\LUNA16\candidates.csv" # ! Replace with your own location
-    annotations_loc = "C:\Users\kiere\Desktop\SMU MITB\CS610\LUNA16\annotations.csv"
-    save_loc = "dataset_save"
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--base_loc",
+        "-bl",
+        type=str,
+        default= "C:\Users\kiere\Desktop\SMU MITB\CS610\LUNA16",
+        help="Global base location of dataset"
+    )
+    parser.add_argument(
+        "--save_loc",
+        "-sl",
+        type=str,
+        default="dataset_save",
+        help="Relative Save Location of dataset"
+    )
+    params = parser.parse_args()
+    
+    base_location = params.base_loc
+    candidates_loc = os.path.join(base_location, "candidates.csv")
+    annotations_loc = os.path.join(base_location, "annotations.csv")
+    save_loc = os.path.join(os.getcwd(), params.save_loc)
     data_prepped = True # ! Make false if dataset is prepped
     if not data_prepped:
         convert_data_to_image_mask_list(base_location, candidates_loc, annotations_loc, save_loc)
