@@ -105,7 +105,8 @@ def prep_dataset(save_loc) -> list:
 if __name__ == '__main__':
     base_location = "C:\Users\kiere\Desktop\SMU MITB\CS610\LUNA16" # ! Replace with your own location
     candidates_loc = "C:\Users\kiere\Desktop\SMU MITB\CS610\LUNA16\candidates.csv" # ! Replace with your own location
+    annotations_loc = "C:\Users\kiere\Desktop\SMU MITB\CS610\LUNA16\annotations.csv"
     save_loc = "dataset_save"
     data_prepped = True # ! Make false if dataset is prepped
     if not data_prepped:
-        convert_data_to_image_mask_list(base_location, candidates_loc, save_Loc)
+        convert_data_to_image_mask_list(base_location, candidates_loc, annotations_loc, save_loc)

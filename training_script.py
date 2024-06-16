@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import os
 from tqdm import tqdm
 import segmentation_models_pytorch as smp
 import math
@@ -127,7 +128,7 @@ if __name__ == "__main__":
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="max", factor=0.75, patience=0, threshold=0.01, verbose=True)
     
     # ! Metrics to consider before saving the model
-    best_loss = 0
+    best_loss = -math.inf
     best_IoU = 0
 
     for epoch in NUM_EPOCHS:
@@ -210,3 +211,11 @@ if __name__ == "__main__":
 
             print(f"Loss : {ave_test_loss} IoU : {ave_test_IoU} Precision : {ave_test_precision} Recall : {ave_test_recall}")
 
+            # Save accordingly
+            if ave_test_IoU > best_IoU:
+                print("Saving IoU model...")
+                torch.save(model, os.path.join(save_loc, "BestIOUModel.pt"))
+            
+            if ave_test_loss < best_loss:
+                print("Saving best loss")
+                torch.save(model, os.path.join(save_loc, "BestLossModel.pt"))
