@@ -18,9 +18,9 @@ from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms.v2 as transforms
 
 # TODO : Convert All dataset into image data and masks using simply ITK
-def convert_data_to_image_mask_list(dataset_loc, candidates_loc, annotations_loc, save_loc):
+def convert_data_to_image_mask_list(dataset_loc, candidates_loc, annotations_loc, save_loc) -> list:
     """
-    @brief Converts the dataset and annotations into images and masks
+    @brief Converts the dataset and annotations into images and masks, save the dataset stats
     @param dataset_loc global location of dataset
     @param candidates_loc global location of candidates
     @param annotations_loc global location of annotations
