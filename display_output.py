@@ -5,7 +5,7 @@ import numpy as np
 import cv2
 import os
 
-from .dataset_prep import prep_dataset
+from dataset_prep import prep_dataset
 
 # Display the training of the model
 def test_model(model, dataloader, threshold, save_results=False) -> None:

@@ -10,7 +10,7 @@ import argparse
 LEARNING_RATE = 0.001
 LOSS_WEIGHTS = [0.7, 0.3]
 
-from .dataset_prep import prep_dataset
+from dataset_prep import prep_dataset
 
 # Loss Function
 class FocalTverskyLoss(nn.Module):
