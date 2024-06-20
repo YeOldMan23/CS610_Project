@@ -122,14 +122,12 @@ if __name__ == '__main__':
         "--base_loc",
         "-bl",
         type=str,
-        default= "C:\Users\kiere\Desktop\SMU MITB\CS610\LUNA16",
         help="Global base location of dataset"
     )
     parser.add_argument(
         "--save_loc",
         "-sl",
         type=str,
-        default="dataset_save",
         help="Relative Save Location of dataset"
     )
     params = parser.parse_args()
