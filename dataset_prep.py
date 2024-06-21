@@ -164,6 +164,7 @@ def convert_data_to_image_mask_list(dataset_loc, candidates_loc, annotations_loc
 
                         # Create the mask from the the candidates
                         # TODO : Create the mask from the candidates , ensure that it is correct
+                        # TODO : I don't think this is correct need to debug
                         mask = np.zeros(ct_scan.shape)
                         mask[int(center_xyz[0] - candidate_diameter):int(center_xyz[0] + candidate_diameter), \
                              int(center_xyz[1] - candidate_diameter):int(center_xyz[1] + candidate_diameter), \
@@ -193,6 +194,7 @@ def convert_data_to_image_mask_list(dataset_loc, candidates_loc, annotations_loc
 
                     # Save the image and the mask
                     # TODO : Make sure the image and the mask are saved correctly
+                    # TODO : You can check your save location just to be sure
                     print("Saving Image : {}, Mask : {}".format(image_loc, mask_loc))
                     cv2.imwrite(image_loc, image)
                     cv2.imwrite(mask_loc, mask)
@@ -214,7 +216,6 @@ class CustomLungDataset(Dataset):
         self.is_train = is_train
         self.dataset_mean, self.dataset_std = dataset_stats
 
-        # TODO : Transforms are the image augmentation
         self.train_transforms = transforms.Compose([
             transforms.ToTensor(), # Convert to Tensor and Normalize [0, 1] (/255)
             transforms.Normalize([self.dataset_mean, ], [self.dataset_std, ]),
@@ -246,6 +247,7 @@ class CustomLungDataset(Dataset):
         return image, mask
 
 # Return the Dataloader(s) from here
+# TODO : Make sure that the train test split is ok
 def prep_dataset(save_loc) -> list:
     image_location = os.path.join(save_loc, "images")
     mask_location = os.path.join(save_loc, "masks")
