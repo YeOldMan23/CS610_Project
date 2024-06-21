@@ -45,7 +45,7 @@ def convert_data_to_image_mask_list(dataset_loc, candidates_loc, annotations_loc
     with open(os.path.join(dataset_loc, "missing.txt")) as f:
         missing_uids = {uid.split('\n')[0] for uid in f}
 
-    print("Missing Data : {}".format(missing_uids))
+    # print("Missing Data : {}".format(missing_uids))
 
     # Make the image and the annotations for the dataset
     if os.path.exists(os.path.join(save_location)):
@@ -68,11 +68,17 @@ def convert_data_to_image_mask_list(dataset_loc, candidates_loc, annotations_loc
                 mhd_file = SimpleITK.ReadImage(data_file)
                 ct_scan = np.array(SimpleITK.GetArrayFromImage(mhd_file), dtype=np.float32)
                 ct_scan.clip(-1000, 1000, ct_scan)
+                print("CT scan max : {}, min : {}".format(np.max(ct_scan), np.min(ct_scan)))
+
+                # Show the image to prove loeaded correctly
 
                 # Normalize the CT Scan from 0 to 1, float to display as a map
                 ct_scan = (ct_scan - (-1000)) / 2000.0
+                # cv2.imshow("CT Scan", ct_scan[50, :, :])
+                # cv2.waitKey(0)
                 
                 print("CT Scan Shape : {}".format(ct_scan.shape))
+                print("CT Scan Min : {}, Max : {}".format(np.min(ct_scan), np.max(ct_scan)))
 
                 origin_xyz = mhd_file.GetOrigin()
                 voxel_size_xyz = mhd_file.GetSpacing()
@@ -82,8 +88,8 @@ def convert_data_to_image_mask_list(dataset_loc, candidates_loc, annotations_loc
                 direction_matrix = np.array(mhd_file.GetDirection()).reshape(3, 3)
 
                 # Get the annotation and candidate data from the image
-                annotation_rows = annotations_data[annotations_data["seriesuid"] == data_file.rstrip(".mhd")]
-                candidates_rows = candidates_data[candidates_data["seriesuid"] == data_file.rstrip(".mhd")]
+                annotation_rows = annotations_data[annotations_data["seriesuid"] == os.path.basename(data_file).rstrip(".mhd")]
+                candidates_rows = candidates_data[candidates_data["seriesuid"] == os.path.basename(data_file).rstrip(".mhd")]
 
                 # Mask array
                 ct_scan_mask = np.zeros(ct_scan.shape)
@@ -132,7 +138,7 @@ def convert_data_to_image_mask_list(dataset_loc, candidates_loc, annotations_loc
 
                 # Make sure candidates are clean
                 candidates_clean = list(filter(lambda x: x.series_uid not in missing_uids, candidates))
-                print("Candidates Clean : {}".format(candidates_clean))
+                # print("Candidates Clean : {}".format(candidates_clean))
                 
                 # Iterate over the candidates and create the mask
                 for candidate in candidates_clean:
@@ -160,15 +166,21 @@ def convert_data_to_image_mask_list(dataset_loc, candidates_loc, annotations_loc
                         mask = np.zeros(ct_scan.shape)
                         mask[int(center_xyz[0] - candidate_diameter):int(center_xyz[0] + candidate_diameter), \
                              int(center_xyz[1] - candidate_diameter):int(center_xyz[1] + candidate_diameter), \
-                            int(center_xyz[2] - candidate_diameter):int(center_xyz[2] + candidate_diameter)] = 1
+                            int(-center_xyz[2] - candidate_diameter):int(-center_xyz[2] + candidate_diameter)] = 1
 
                         # Add the mask to the mask array
                         ct_scan_mask += mask
 
+                print("Mask Sum : {}".format(np.sum(ct_scan_mask)))
                 # Slice out a section of the image and the mask for the dataset, slice grayscale
                 for i in range(0, ct_scan.shape[0], 5):
                     image = ct_scan[i, :, :]
                     mask = ct_scan_mask[i, :, :]
+
+                    # # Show the image and mask
+                    # cv2.imshow("Image", image)
+                    # cv2.imshow("Mask", mask)
+                    # cv2.waitKey(0)
 
                     # If the mask is empty, skip the image
                     if np.sum(mask) == 0:
@@ -232,8 +244,33 @@ class CustomLungDataset(Dataset):
         return image, mask
 
 # Return the Dataloader(s) from here
-def prep_dataset(save_loc) -> list: 
-    pass
+def prep_dataset(save_loc) -> list:
+    image_location = os.path.join(save_loc, "images")
+    mask_location = os.path.join(save_loc, "masks")
+
+    image_files = os.listdir(image_location)
+    mask_files = os.listdir(mask_location)
+
+    # Load the images and the masks
+    image_list = [cv2.imread(os.path.join(image_location, image_file)) for image_file in image_files]
+    mask_list = [cv2.imread(os.path.join(mask_location, mask_file)) for mask_file in mask_files]
+
+    # Get the dataset stats
+    dataset_mean = np.mean(image_list)
+    dataset_std = np.std(image_list)
+
+    dataset_stats = (dataset_mean, dataset_std)
+
+    # Split the dataset into train and test
+    image_train, image_test, mask_train, mask_test = train_test_split(image_list, mask_list, test_size=0.2)
+
+    # Create the dataloaders
+    train_dataset = CustomLungDataset(mask_train, image_train, dataset_stats, is_train=True)
+    test_dataset = CustomLungDataset(mask_test, image_test, dataset_stats, is_train=False)
+    train_dataloader = DataLoader(train_dataset, batch_size=4, shuffle=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=4, shuffle=False)
+
+    return train_dataloader, test_dataloader 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
