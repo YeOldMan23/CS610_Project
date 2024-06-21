@@ -163,6 +163,7 @@ def convert_data_to_image_mask_list(dataset_loc, candidates_loc, annotations_loc
                         print("Possible Nodule : {}  with diameter {}".format(center_xyz, candidate_diameter))
 
                         # Create the mask from the the candidates
+                        # TODO : Create the mask from the candidates , ensure that it is correct
                         mask = np.zeros(ct_scan.shape)
                         mask[int(center_xyz[0] - candidate_diameter):int(center_xyz[0] + candidate_diameter), \
                              int(center_xyz[1] - candidate_diameter):int(center_xyz[1] + candidate_diameter), \
@@ -191,6 +192,7 @@ def convert_data_to_image_mask_list(dataset_loc, candidates_loc, annotations_loc
                     mask_loc = os.path.join(save_location, "masks", "mask_{}.png".format(image_counter))
 
                     # Save the image and the mask
+                    # TODO : Make sure the image and the mask are saved correctly
                     print("Saving Image : {}, Mask : {}".format(image_loc, mask_loc))
                     cv2.imwrite(image_loc, image)
                     cv2.imwrite(mask_loc, mask)
