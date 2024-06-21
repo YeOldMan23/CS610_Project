@@ -4,6 +4,7 @@ import cv2
 import SimpleITK
 import shutil
 import numpy as np
+from collections import namedtuple
 
 import argparse
 
@@ -42,6 +43,13 @@ def convert_data_to_image_mask_list(dataset_loc, candidates_loc, annotations_loc
     
     image_data = []
 
+    # Open the missing data
+    with open(os.path.join(dataset_loc, "missing.txt")) as f:
+        missing_uids = {uid.split('\n')[0] for uid in f}
+
+    print("Missing Data : {}".format(missing_uids))
+
+
     for dataset in dataset_files: # Subset 1-10
         if dataset.endswith(".csv"):
             continue
@@ -56,6 +64,19 @@ def convert_data_to_image_mask_list(dataset_loc, candidates_loc, annotations_loc
                 # Normalize the CT Scan from 0 to 1, float to display as a map
                 ct_scan = (ct_scan - (-1000)) / 2000.0
 
+                print(ct_scan.shape)
+
+                origin_xyz = mhd_file.GetOrigin()
+                voxel_size_xyz = mhd_file.GetSpacing()
+
+                origin_xyz_np = np.array(origin_xyz)
+                voxel_size_xyz_np = np.array(voxel_size_xyz)
+                direction_matrix = np.array(mhd_file.GetDirection()).reshape(3, 3)
+
+                cri = ((center_xyz - origin_xyz_np) @ np.linalg.inv(direction_matrix)) / voxel_size_xyz_np
+                cri = np.round(cri)
+                irc = (int(cri[2]), int(cri[1]), int(cri[0]))
+
                 # Get the annotation and candidate data from the image
                 annotation_rows = annotations_data[annotations_data["seriesuid"] == data_file.rstrip(".mhd")]
                 candidates_rows = candidates_data[candidates_data["seriesuid"] == data_file.rstrip(".mhd")]
@@ -67,6 +88,51 @@ def convert_data_to_image_mask_list(dataset_loc, candidates_loc, annotations_loc
                 # Choose from annotations
                 # ? Annotations contain all the annotations
                 # ? Candidates contain all the candidates that are chosen
+                diameters = {}
+                candidates = []
+
+                for _, row in annotation_rows.iterrows():
+                    center_xyz = (row.coordX, row.coordY, row.coordZ)
+                    diameters.setdefault(row.seriesuid, []).append(
+                        (center_xyz, row.diameter_mm)
+                    )
+
+                CandidateInfoTuple = namedtuple(
+                    'CandidateInfoTuple',
+                    ['is_nodule', 'diameter_mm', 'series_uid', 'center_xyz']
+                )
+
+                for _, row in candidates_rows.iterrows():
+                    candidate_center_xyz = (row.coordX, row.coordY, row.coordZ)
+
+                candidate_diameter = 0.0
+
+                for annotation in diameters.get(row.seriesuid, []):
+                    annotation_center_xyz, annotation_diameter = annotation
+
+                for i in range(3):
+                    delta = abs(candidate_center_xyz[i] - annotation_center_xyz[i])
+                    if delta > annotation_diameter / 4:
+                        break
+                    else:
+                        candidate_diameter = annotation_diameter
+                        break
+
+                candidates.append(CandidateInfoTuple(
+                    bool(row['class']),
+                    candidate_diameter,
+                    row.seriesuid,
+                    candidate_center_xyz
+                ))
+
+                candidates.sort(reverse=True)
+
+                candidates_clean = list(filter(lambda x: x.series_uid not in missing_uids, candidates))
+
+                print(f'All candidates in dataset: {len(candidates)}')
+                print(f'Candidates with CT scan  : {len(candidates_clean)}')
+
+                
 
 
 class CustomLungDataset(Dataset):
@@ -113,7 +179,7 @@ class CustomLungDataset(Dataset):
         return image, mask
 
 # Return the Dataloader(s) from here
-def prep_dataset(save_loc) -> list:
+def prep_dataset(save_loc) -> list: 
     pass
 
 if __name__ == '__main__':
