@@ -25,7 +25,7 @@ def convert_data_to_image_mask_list(dataset_loc, candidates_loc, annotations_loc
     @param dataset_loc global location of dataset
     @param candidates_loc global location of candidates
     @param annotations_loc global location of annotations
-    @param save_loc save location of candidates, relative path
+    @param save_loc save location of candidates, global path
 
     return (list image_data, list image_mask) Image Data (512x512 images) and corresponding Mask
             lists are in order 
@@ -35,13 +35,11 @@ def convert_data_to_image_mask_list(dataset_loc, candidates_loc, annotations_loc
     dataset_files = os.listdir(dataset_loc)
     candidates_data = pd.read_csv(candidates_loc)
     annotations_data = pd.read_csv(annotations_loc)
-    save_location = os.path.join(os.getcwd(), save_loc)
+    save_location = save_loc
 
     if os.path.exists(save_location):
         shutil.rmtree(save_location)
     os.mkdir(save_location)
-    
-    image_data = []
 
     # Open the missing data
     with open(os.path.join(dataset_loc, "missing.txt")) as f:
@@ -49,22 +47,32 @@ def convert_data_to_image_mask_list(dataset_loc, candidates_loc, annotations_loc
 
     print("Missing Data : {}".format(missing_uids))
 
+    # Make the image and the annotations for the dataset
+    if os.path.exists(os.path.join(save_location)):
+        shutil.rmtree(os.path.join(save_location))
+    os.mkdir(os.path.join(save_location))
+    os.mkdir(os.path.join(save_location, "images"))
+    os.mkdir(os.path.join(save_location, "masks"))
+
+    image_counter = 0
+    annotation_counter = 0
 
     for dataset in dataset_files: # Subset 1-10
-        if dataset.endswith(".csv"):
+        if dataset.endswith(".csv") or dataset.endswith(".txt"):
             continue
         for data_file in os.listdir(os.path.join(dataset_loc, dataset)):
             # Get all the .mhd data
             if data_file.endswith(".mhd"):
                 # Read the mhd data 
+                data_file = os.path.join(dataset_loc, dataset, data_file)
                 mhd_file = SimpleITK.ReadImage(data_file)
                 ct_scan = np.array(SimpleITK.GetArrayFromImage(mhd_file), dtype=np.float32)
                 ct_scan.clip(-1000, 1000, ct_scan)
 
                 # Normalize the CT Scan from 0 to 1, float to display as a map
                 ct_scan = (ct_scan - (-1000)) / 2000.0
-
-                print(ct_scan.shape)
+                
+                print("CT Scan Shape : {}".format(ct_scan.shape))
 
                 origin_xyz = mhd_file.GetOrigin()
                 voxel_size_xyz = mhd_file.GetSpacing()
@@ -72,10 +80,6 @@ def convert_data_to_image_mask_list(dataset_loc, candidates_loc, annotations_loc
                 origin_xyz_np = np.array(origin_xyz)
                 voxel_size_xyz_np = np.array(voxel_size_xyz)
                 direction_matrix = np.array(mhd_file.GetDirection()).reshape(3, 3)
-
-                cri = ((center_xyz - origin_xyz_np) @ np.linalg.inv(direction_matrix)) / voxel_size_xyz_np
-                cri = np.round(cri)
-                irc = (int(cri[2]), int(cri[1]), int(cri[0]))
 
                 # Get the annotation and candidate data from the image
                 annotation_rows = annotations_data[annotations_data["seriesuid"] == data_file.rstrip(".mhd")]
@@ -101,36 +105,85 @@ def convert_data_to_image_mask_list(dataset_loc, candidates_loc, annotations_loc
                     'CandidateInfoTuple',
                     ['is_nodule', 'diameter_mm', 'series_uid', 'center_xyz']
                 )
-
+                
+                # For each candidate, check if it is a nodule or not
                 for _, row in candidates_rows.iterrows():
                     candidate_center_xyz = (row.coordX, row.coordY, row.coordZ)
 
-                candidate_diameter = 0.0
+                    candidate_diameter = 0.0
 
-                for annotation in diameters.get(row.seriesuid, []):
-                    annotation_center_xyz, annotation_diameter = annotation
+                    for annotation in diameters.get(row.seriesuid, []):
+                        annotation_center_xyz, annotation_diameter = annotation
 
-                for i in range(3):
-                    delta = abs(candidate_center_xyz[i] - annotation_center_xyz[i])
-                    if delta > annotation_diameter / 4:
-                        break
-                    else:
-                        candidate_diameter = annotation_diameter
-                        break
+                        for i in range(3):
+                            delta = abs(candidate_center_xyz[i] - annotation_center_xyz[i])
+                            if delta > annotation_diameter / 4:
+                                break
+                            else:
+                                candidate_diameter = annotation_diameter
+                                break
 
-                candidates.append(CandidateInfoTuple(
-                    bool(row['class']),
-                    candidate_diameter,
-                    row.seriesuid,
-                    candidate_center_xyz
-                ))
+                        candidates.append(CandidateInfoTuple(
+                            bool(row['class']),
+                            candidate_diameter,
+                            row.seriesuid,
+                            candidate_center_xyz
+                        ))
 
-                candidates.sort(reverse=True)
-
+                # Make sure candidates are clean
                 candidates_clean = list(filter(lambda x: x.series_uid not in missing_uids, candidates))
+                print("Candidates Clean : {}".format(candidates_clean))
+                
+                # Iterate over the candidates and create the mask
+                for candidate in candidates_clean:
+                    if candidate.is_nodule:
+                        # Create the mask
+                        center_xyz = candidate.center_xyz
+                        
+                        # Adjust the coordinates
+                        origin_xyz = mhd_file.GetOrigin()
+                        voxel_size_xyz = mhd_file.GetSpacing()
+                        direction_matrix = np.array(mhd_file.GetDirection()).reshape(3, 3)
 
-                print(f'All candidates in dataset: {len(candidates)}')
-                print(f'Candidates with CT scan  : {len(candidates_clean)}')
+                        origin_xyz_np = np.array(origin_xyz)
+                        voxel_size_xyz_np = np.array(voxel_size_xyz)
+
+                        cri = ((center_xyz - origin_xyz_np) @ np.linalg.inv(direction_matrix)) / voxel_size_xyz_np
+                        cri = np.round(cri)
+
+                        print("Center : {}, Origin : {}, Voxel : {}, Direction : {}".format(center_xyz, origin_xyz, voxel_size_xyz, direction_matrix))
+
+                        candidate_diameter = candidate.diameter_mm
+                        print("Possible Nodule : {}  with diameter {}".format(center_xyz, candidate_diameter))
+
+                        # Create the mask from the the candidates
+                        mask = np.zeros(ct_scan.shape)
+                        mask[int(center_xyz[0] - candidate_diameter):int(center_xyz[0] + candidate_diameter), \
+                             int(center_xyz[1] - candidate_diameter):int(center_xyz[1] + candidate_diameter), \
+                            int(center_xyz[2] - candidate_diameter):int(center_xyz[2] + candidate_diameter)] = 1
+
+                        # Add the mask to the mask array
+                        ct_scan_mask += mask
+
+                # Slice out a section of the image and the mask for the dataset, slice grayscale
+                for i in range(0, ct_scan.shape[0], 5):
+                    image = ct_scan[i, :, :]
+                    mask = ct_scan_mask[i, :, :]
+
+                    # If the mask is empty, skip the image
+                    if np.sum(mask) == 0:
+                        continue
+
+                    # Save the image and the mask
+                    image_loc = os.path.join(save_location, "images", "image_{}.png".format(image_counter))
+                    mask_loc = os.path.join(save_location, "masks", "mask_{}.png".format(image_counter))
+
+                    # Save the image and the mask
+                    print("Saving Image : {}, Mask : {}".format(image_loc, mask_loc))
+                    cv2.imwrite(image_loc, image)
+                    cv2.imwrite(mask_loc, mask)
+
+                    image_counter += 1
 
                 
 
@@ -194,14 +247,14 @@ if __name__ == '__main__':
         "--save_loc",
         "-sl",
         type=str,
-        help="Relative Save Location of dataset"
+        help="Global Save Location of dataset"
     )
     params = parser.parse_args()
     
     base_location = params.base_loc
     candidates_loc = os.path.join(base_location, "candidates.csv")
     annotations_loc = os.path.join(base_location, "annotations.csv")
-    save_loc = os.path.join(os.getcwd(), params.save_loc)
-    data_prepped = True # ! Make false if dataset is prepped
+    save_loc = params.save_loc
+    data_prepped = False # ! Make false if dataset is prepped
     if not data_prepped:
         convert_data_to_image_mask_list(base_location, candidates_loc, annotations_loc, save_loc)
